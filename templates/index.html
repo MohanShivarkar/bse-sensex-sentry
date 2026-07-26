@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOHAN'S SENSEX SENTRY - Executive Command Console</title>
+  
+  <!-- Modern Typography & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+
+  <style>
+    :root {
+      --bg-dark: #0B0E14;
+      --card-bg: rgba(22, 27, 34, 0.75);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --accent-green: #00E676;
+      --accent-red: #FF1744;
+      --accent-blue: #29B6F6;
+      --accent-gold: #FFD700;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      font-family: 'Inter', sans-serif;
+      color: #E2E8F0;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(0, 230, 118, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(41, 182, 246, 0.04) 0%, transparent 40%);
+    }
+
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+    .navbar-glass {
+      background: rgba(11, 14, 20, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      transition: all 0.25s ease;
+    }
+
+    .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .kpi-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94A3B8;
+    }
+
+    .kpi-value {
+      font-size: 1.65rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .checklist-item {
+      padding: 10px 14px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-color);
+      transition: all 0.2s;
+    }
+
+    .checklist-item.passed {
+      border-color: rgba(0, 230, 118, 0.3);
+      background: rgba(0, 230, 118, 0.05);
+    }
+
+    .checklist-item.failed {
+      border-color: rgba(255, 23, 68, 0.2);
+    }
+
+    .terminal-container {
+      background: #06080C;
+      border-radius: 0 0 12px 12px;
+      padding: 16px;
+    }
+
+    .terminal-body {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: #38BDF8;
+      max-height: 380px;
+      overflow-y: auto;
+      margin: 0;
+      white-space: pre-wrap;
+    }
+
+    .terminal-body::-webkit-scrollbar { width: 6px; }
+    .terminal-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Glass Navigation -->
+  <nav class="navbar navbar-glass sticky-top py-2 px-3 mb-4">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center gap-2">
+        <i class="fa-solid fa-bolt-lightning text-warning fs-5"></i>
+        <h5 class="fw-bold m-0 text-white font-mono" style="letter-spacing: -0.03em;">MOHAN'S SENSEX-SENTRY</h5>
+        <span class="badge bg-danger bg-opacity-20 text-danger border border-danger border-opacity-30 ms-2">BSE SENSEX</span>
+      </div>
+
+      <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge bg-success bg-opacity-15 text-success border border-success border-opacity-30 rounded-pill px-3 py-1.5 font-mono">
+            <i class="fa-solid fa-signal me-1"></i> DHAN API LIVE
+          </span>
+          <span class="badge bg-info bg-opacity-15 text-info border border-info border-opacity-30 rounded-pill px-3 py-1.5 font-mono" id="badge-market-hours">
+            09:15 - 15:30 IST
+          </span>
+        </div>
+        <div class="text-end font-mono small text-secondary border-start border-secondary border-opacity-25 ps-3" id="system-clock">
+          --:--:-- IST
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container-fluid px-4 pb-4">
+
+    <!-- KPI Metric Summary Row -->
+    <div class="row g-3 mb-4">
+      
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="glass-card p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="kpi-title">Today's Win Rate</span>
+            <span class="badge bg-success bg-opacity-20 text-success font-mono" id="kpi-winloss-tag">0W / 0L</span>
+          </div>
+          <div class="kpi-value text-white font-mono" id="kpi-winrate">0.0%</div>
+          <div class="small text-secondary mt-1 font-mono" id="kpi-total-trades">0 Trades Total</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="glass-card p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="kpi-title">Net Expansion PnL</span>
+            <span class="badge bg-primary bg-opacity-20 text-primary font-mono">BSE:SENSEX</span>
+          </div>
+          <div class="kpi-value text-success font-mono" id="kpi-net-points">+0.00 Pts</div>
+          <div class="small text-secondary mt-1 font-mono" id="kpi-avg-points">+0.00 Pts/Trade</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="glass-card p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="kpi-title">Market Trend Engine</span>
+            <span class="small text-secondary font-mono" id="kpi-trend-age">Age: 0m</span>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary px-3 py-2 fs-6 font-mono" id="kpi-trend-badge">NEUTRAL</span>
+          </div>
+          <div class="small text-secondary mt-2 font-mono" id="kpi-signal-action">MONITORING</div>
+        </div>
+      </div>
+
+      <div class="col-12 col-sm-6 col-xl-3">
+        <div class="glass-card p-3 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="kpi-title">System Gateway Health</span>
+          </div>
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30"><i class="fa-paper-plane me-1"></i> Telegram</span>
+            <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30"><i class="fa-brands fa-whatsapp me-1"></i> Green-API</span>
+          </div>
+          <div class="small text-secondary font-mono">
+            <i class="fa-solid fa-plug text-success me-1"></i> Dhan WebSocket Feed Active
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Active Radar & Strategy Verification Matrix Row -->
+    <div class="row g-3 mb-4">
+      
+      <!-- Active Position Radar -->
+      <div class="col-12 col-lg-6">
+        <div class="glass-card p-3.5 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold m-0 text-white"><i class="fa-solid fa-crosshairs text-danger me-2"></i>Active Position & Risk Radar</h6>
+            <span class="badge bg-secondary bg-opacity-30 text-secondary font-mono">BSE SENSEX 1m</span>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-sm-3">
+              <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                <div class="small text-secondary font-mono">Position Run</div>
+                <div class="fw-bold text-white font-mono" id="radar-position">IDLE</div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                <div class="small text-secondary font-mono">Entry Trigger</div>
+                <div class="fw-bold text-white font-mono" id="radar-entry">₹0.00</div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                <div class="small text-secondary font-mono">Max Expansion</div>
+                <div class="fw-bold text-success font-mono" id="radar-expansion">+0.00 Pts</div>
+              </div>
+            </div>
+            <div class="col-6 col-sm-3">
+              <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-20">
+                <div class="small text-secondary font-mono">Hard Stop Boundary</div>
+                <div class="fw-bold text-warning font-mono">15 EMA Close</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="p-2.5 rounded bg-dark bg-opacity-75 border border-secondary border-opacity-25 font-mono small d-flex justify-content-between align-items-center">
+            <span class="text-secondary"><i class="fa-solid fa-terminal me-1 text-info"></i> System Action Telemetry</span>
+            <span class="text-info fw-bold" id="radar-sys-action">Monitoring SENSEX market blocks... Holding structural state</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Strategy Verification Matrix -->
+      <div class="col-12 col-lg-6">
+        <div class="glass-card p-3.5 h-100">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold m-0 text-white"><i class="fa-solid fa-list-check text-info me-2"></i>Strategy Verification Matrix</h6>
+            <span class="badge bg-secondary bg-opacity-30 text-secondary font-mono">1m Confirmation</span>
+          </div>
+
+          <div class="row g-2">
+            <div class="col-6 col-sm-3">
+              <div class="checklist-item failed" id="chk-cross">
+                <div class="d-flex align-items-center gap-1.5 text-warning font-mono small fw-bold">
+                  <i class="fa-solid fa-bolt" id="icon-cross"></i> EMA Cross Lock
+                </div>
+                <div class="text-secondary font-mono small mt-1" id="val-cross">No Cross</div>
+              </div>
+            </div>
+
+            <div class="col-6 col-sm-3">
+              <div class="checklist-item failed" id="chk-macro">
+                <div class="d-flex align-items-center gap-1.5 text-info font-mono small fw-bold">
+                  <i class="fa-solid fa-shield-halved" id="icon-macro"></i> 200 EMA Guard
+                </div>
+                <div class="text-secondary font-mono small mt-1" id="val-macro">Macro Block</div>
+              </div>
+            </div>
+
+            <div class="col-6 col-sm-3">
+              <div class="checklist-item failed" id="chk-candle">
+                <div class="d-flex align-items-center gap-1.5 text-success font-mono small fw-bold">
+                  <i class="fa-solid fa-chart-simple" id="icon-candle"></i> Candle Strength
+                </div>
+                <div class="text-secondary font-mono small mt-1" id="val-candle">Weak Candle</div>
+              </div>
+            </div>
+
+            <div class="col-6 col-sm-3">
+              <div class="checklist-item failed" id="chk-volume">
+                <div class="d-flex align-items-center gap-1.5 text-danger font-mono small fw-bold">
+                  <i class="fa-solid fa-fire" id="icon-volume"></i> Volume Fuel
+                </div>
+                <div class="text-secondary font-mono small mt-1" id="val-volume">Low Volume</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 d-flex justify-content-between align-items-center">
+            <span class="small text-secondary font-mono">Phase 1 Active | Phase 2 Dhan Options Hook Ready</span>
+            <span class="badge bg-success bg-opacity-20 text-success border border-success border-opacity-30">BSE SENSEX Spot</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Live Terminal Log Console -->
+    <div class="row">
+      <div class="col-12">
+        <div class="glass-card">
+          <div class="bg-dark bg-opacity-90 px-4 py-3 border-bottom border-secondary border-opacity-25 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+              <i class="fa-solid fa-code text-warning"></i>
+              <h6 class="fw-bold m-0 text-white">Live Execution Terminal Log Stream</h6>
+            </div>
+            <div class="d-flex align-items-center gap-2 font-mono small flex-wrap">
+              <select class="form-select form-select-sm bg-dark text-white border-secondary border-opacity-50 font-mono py-1 px-2.5 rounded-2" id="select-log-file" style="width: auto; font-size: 11px;" onchange="onLogFileSelected()">
+                <option value="LIVE">🔴 Today's Live Stream</option>
+              </select>
+              <button class="btn btn-sm btn-outline-info py-1 px-2.5 rounded-2" id="btn-autoscroll" onclick="toggleAutoScroll()">
+                <i class="fa-solid fa-lock me-1"></i> Auto-Scroll: ON
+              </button>
+              <button class="btn btn-sm btn-outline-success py-1 px-2.5 rounded-2" onclick="downloadLogFile()">
+                <i class="fa-solid fa-download me-1"></i> Save Log
+              </button>
+              <button class="btn btn-sm btn-outline-secondary py-1 px-2.5 rounded-2" onclick="refreshLogStream(true)">
+                <i class="fa-solid fa-rotate me-1"></i> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="terminal-container">
+            <pre class="terminal-body" id="terminal-stream">Synchronizing BSE Sensex market log stream from Dhan API...</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    function updateClock() {
+      const now = new Date();
+      document.getElementById("system-clock").innerText = now.toTimeString().split(" ")[0] + " IST";
+    }
+    setInterval(updateClock, 1000);
+
+    // Restore cached logs from browser memory on load if server is rebooting
+    try {
+      const cachedLogs = localStorage.getItem("sentry_log_cache_SENSEX");
+      if (cachedLogs && cachedLogs.length > 50) {
+        const term = document.getElementById("terminal-stream");
+        if (term) {
+          term.innerText = cachedLogs;
+        }
+      }
+    } catch (e) {}
+
+    function updateDashboard() {
+      fetch("/status")
+        .then((res) => res.json())
+        .then((data) => {
+          const sensexData = data.SENSEX;
+          if (!sensexData) return;
+
+          // 1. KPIs
+          if (sensexData.metrics) {
+            const wins = sensexData.metrics.wins || 0;
+            const losses = sensexData.metrics.losses || 0;
+            const netPoints = sensexData.metrics.net_points || 0.0;
+            const totalTrades = wins + losses;
+            const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : "0.0";
+            const avgPts = totalTrades > 0 ? (netPoints / totalTrades).toFixed(2) : "0.00";
+
+            document.getElementById("kpi-winrate").innerText = winRate + "%";
+            document.getElementById("kpi-winloss-tag").innerText = `${wins}W / ${losses}L`;
+            document.getElementById("kpi-total-trades").innerText = `${totalTrades} Trades Total`;
+            document.getElementById("kpi-net-points").innerText = (netPoints >= 0 ? "+" : "") + netPoints.toFixed(2) + " Pts";
+            document.getElementById("kpi-avg-points").innerText = (avgPts >= 0 ? "+" : "") + avgPts + " Pts/Trade";
+          }
+
+          // 2. Trend Badge
+          const trend = sensexData.current_trend || "NEUTRAL";
+          const trendAge = sensexData.trend_age || 0;
+          const trendBadge = document.getElementById("kpi-trend-badge");
+          document.getElementById("kpi-trend-age").innerText = `Age: ${trendAge}m`;
+
+          if (trend === "BULLISH") {
+            trendBadge.className = "badge bg-success px-3 py-2 fs-6 font-mono";
+            trendBadge.innerText = "📈 BULLISH";
+          } else if (trend === "BEARISH") {
+            trendBadge.className = "badge bg-danger px-3 py-2 fs-6 font-mono";
+            trendBadge.innerText = "📉 BEARISH";
+          } else {
+            trendBadge.className = "badge bg-secondary px-3 py-2 fs-6 font-mono";
+            trendBadge.innerText = "NEUTRAL";
+          }
+
+          // 3. Position Radar
+          const trade = sensexData.active_trade || {};
+          const posElem = document.getElementById("radar-position");
+          const entryElem = document.getElementById("radar-entry");
+          const expElem = document.getElementById("radar-expansion");
+
+          if (trade.direction) {
+            posElem.innerText = trade.direction;
+            posElem.className = trade.direction === "BULLISH" ? "fw-bold text-success font-mono" : "fw-bold text-danger font-mono";
+            entryElem.innerText = "₹" + (trade.entry_price || 0).toLocaleString('en-IN', {minimumFractionDigits: 2});
+            
+            const maxExp = trade.max_expansion || trade.entry_price || 0;
+            const expPts = trade.direction === "BULLISH" ? (maxExp - trade.entry_price) : (trade.entry_price - maxExp);
+            expElem.innerText = "+" + expPts.toFixed(2) + " Pts";
+          } else {
+            posElem.innerText = "IDLE";
+            posElem.className = "fw-bold text-white font-mono";
+            entryElem.innerText = "₹0.00";
+            expElem.innerText = "+0.00 Pts";
+          }
+
+          refreshLogStream();
+        });
+    }
+
+    let lastLogText = "";
+    let autoScrollEnabled = true;
+    let selectedLogFile = "LIVE";
+
+    function toggleAutoScroll() {
+      autoScrollEnabled = !autoScrollEnabled;
+      const btn = document.getElementById("btn-autoscroll");
+      if (btn) {
+        if (autoScrollEnabled) {
+          btn.className = "btn btn-sm btn-outline-info py-1 px-2.5 rounded-2";
+          btn.innerHTML = '<i class="fa-solid fa-lock me-1"></i> Auto-Scroll: ON';
+          const term = document.getElementById("terminal-stream");
+          if (term) term.scrollTop = term.scrollHeight;
+        } else {
+          btn.className = "btn btn-sm btn-outline-warning py-1 px-2.5 rounded-2";
+          btn.innerHTML = '<i class="fa-solid fa-lock-open me-1"></i> Auto-Scroll: OFF';
+        }
+      }
+    }
+
+    function downloadLogFile() {
+      const term = document.getElementById("terminal-stream");
+      if (!term || !term.innerText) return;
+      const todayStr = new Date().toISOString().split('T')[0];
+      const filename = `SENSEX_Sentry_Log_${todayStr}.txt`;
+      const blob = new Blob([term.innerText], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function fetchAvailableLogFiles() {
+      fetch("/list_logs/SENSEX")
+        .then((res) => res.json())
+        .then((data) => {
+          const select = document.getElementById("select-log-file");
+          if (select && data.files) {
+            select.innerHTML = '<option value="LIVE">🔴 Today\'s Live Stream</option>';
+            data.files.forEach((f) => {
+              const dateName = f.replace("sentry_log_", "").replace(".txt", "");
+              const opt = document.createElement("option");
+              opt.value = f;
+              opt.innerText = `📅 File: ${dateName}`;
+              select.appendChild(opt);
+            });
+            select.value = selectedLogFile;
+          }
+        });
+    }
+
+    function onLogFileSelected() {
+      const select = document.getElementById("select-log-file");
+      if (select) {
+        selectedLogFile = select.value;
+        refreshLogStream(true);
+      }
+    }
+
+    function refreshLogStream(forceRefresh = false) {
+      let url = "/get_log/SENSEX";
+      if (selectedLogFile && selectedLogFile !== "LIVE") {
+        url += "?file=" + encodeURIComponent(selectedLogFile);
+      }
+
+      fetch(url)
+        .then((res) => res.json())
+        .then((logData) => {
+          const term = document.getElementById("terminal-stream");
+          if (term && logData.log) {
+            if (!logData.log.includes("Synchronizing BSE Sensex")) {
+              try {
+                localStorage.setItem("sentry_log_cache_SENSEX", logData.log);
+              } catch (e) {}
+            }
+
+            if (logData.log !== lastLogText || forceRefresh) {
+              const isAtBottom = (term.scrollHeight - term.clientHeight - term.scrollTop) < 40;
+              lastLogText = logData.log;
+              term.innerText = logData.log;
+              
+              if (autoScrollEnabled && (isAtBottom || forceRefresh)) {
+                term.scrollTop = term.scrollHeight;
+              }
+              parseChecklistFromLogs(logData.log);
+            }
+          }
+        });
+    }
+
+    function parseChecklistFromLogs(logText) {
+      if (!logText) return;
+      const lines = logText.split("\n");
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].includes("Setup Checklist")) {
+          const line = lines[i];
+          const isCross = line.includes("Cross: [Y]") || line.includes("Cross: ✅");
+          updateChecklistItem("chk-cross", "icon-cross", "val-cross", isCross, "Signal Lock", "No Cross");
+
+          const isMacro = line.includes("200EMA: [Y]") || line.includes("200EMA: ✅");
+          updateChecklistItem("chk-macro", "icon-macro", "val-macro", isMacro, "Macro Clear", "Macro Block");
+
+          const isCandle = line.includes("Candle: [Y]") || line.includes("Candle: ✅");
+          updateChecklistItem("chk-candle", "icon-candle", "val-candle", isCandle, "Strong Candle", "Weak Candle");
+
+          const isVol = line.includes("Volume Fuel: [Y]") || line.includes("Volume Fuel: ✅");
+          updateChecklistItem("chk-volume", "icon-volume", "val-volume", isVol, "Fuel ≥ 1.5x", "Low Volume");
+          break;
+        }
+      }
+    }
+
+    function updateChecklistItem(itemId, iconId, valId, passed, passText, failText) {
+      const item = document.getElementById(itemId);
+      const val = document.getElementById(valId);
+      if (!item || !val) return;
+
+      if (passed) {
+        item.className = "checklist-item passed";
+        val.innerText = passText;
+        val.className = "text-success font-mono small mt-1 fw-bold";
+      } else {
+        item.className = "checklist-item failed";
+        val.innerText = failText;
+        val.className = "text-secondary font-mono small mt-1";
+      }
+    }
+
+    updateClock();
+    fetchAvailableLogFiles();
+    updateDashboard();
+    setInterval(updateDashboard, 4000);
+  </script>
+
+</body>
+</html>
