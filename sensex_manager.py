@@ -314,18 +314,26 @@ def run_asset_production_loop(name, details):
                     dhan_order_router.place_sensex_option_order(signal["price"], state["current_trend"])
                 
                 elif signal["type"] == "HARD_EXIT":
-                    outcome_emoji = "🟢 SUCCESS WIN" if signal["result"] == "WIN" else "🔴 STOP LOSS FAIL"
-                    exit_msg = (
-                        f"🚨 *HARD EXIT: {name} (BSE SENSEX)* 🚨\n\n"
-                        f"• *Trade Result:* {outcome_emoji}\n"
-                        f"• *Points Output:* {signal['points']:+.2f} Pts\n"
-                        f"• *Exit Realized Price:* ₹{signal['price']:,.2f}\n\n"
-                        f"📊 *Running Scorecard Today:*\n"
-                        f"🏆 Wins: {state['metrics']['wins']} | ❌ Losses: {state['metrics']['losses']}\n"
-                        f"💰 Net Performance: {state['metrics']['net_points']:+.2f} points"
-                    )
-                    telegram_utils.send_telegram(exit_msg)
-                    whatsapp_utils.send_hard_exit_alert(exit_msg)
+                    net_pnl = signal["points"]
+                    fee_pnl = signal.get("fee_points", round(signal["price"] * 0.0004, 2))
+                    gross_pnl = signal.get("gross_points", round(net_pnl + fee_pnl, 2))
+                    total_brokerage = state["metrics"].get("brokerage", 0.0)
+                    
+                    try:
+                        telegram_utils.send_exit_breakdown_alert(
+                            asset_name=name, result_tag=signal["result"], gross_pnl=gross_pnl,
+                            fee_pnl=fee_pnl, net_pnl=net_pnl, exit_price=signal["price"],
+                            wins=state["metrics"]["wins"], losses=state["metrics"]["losses"],
+                            total_brokerage=total_brokerage, total_net=state["metrics"]["net_points"]
+                        )
+                        whatsapp_utils.send_exit_breakdown_alert(
+                            asset_name=name, result_tag=signal["result"], gross_pnl=gross_pnl,
+                            fee_pnl=fee_pnl, net_pnl=net_pnl, exit_price=signal["price"],
+                            wins=state["metrics"]["wins"], losses=state["metrics"]["losses"],
+                            total_brokerage=total_brokerage, total_net=state["metrics"]["net_points"]
+                        )
+                    except Exception as e:
+                        print(format_terminal_log("EXIT ALERT ERROR", f"[{name}] Dispatch error: {e}"))
 
                 elif signal["type"] == "EOD_REPORT":
                     telegram_utils.send_eod_report(name, signal["date"], signal["wins"], signal["losses"], signal["net_points"])

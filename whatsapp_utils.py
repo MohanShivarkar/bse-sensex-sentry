@@ -84,7 +84,7 @@ def send_trailing_update_alert(asset_name, trail_level, sl_price, current_gain):
     )
     return send_whatsapp_message(msg)
 
-def send_exit_breakdown_alert(asset_name, result_tag, gross_pnl, fee_pnl, net_pnl, exit_price, wins, losses, total_net):
+def send_exit_breakdown_alert(asset_name, result_tag, gross_pnl, fee_pnl, net_pnl, exit_price, wins, losses, total_brokerage, total_net):
     outcome_emoji = "🟢 SUCCESS WIN" if result_tag == "WIN" else "🔴 STOP LOSS FAIL"
     
     msg = (
@@ -93,10 +93,12 @@ def send_exit_breakdown_alert(asset_name, result_tag, gross_pnl, fee_pnl, net_pn
         f"* Trade Result: {outcome_emoji}\n"
         f"* Exit Price: {exit_price:.2f}\n\n"
         f"📊 *DETAILED PnL BREAKDOWN:*\n"
-        f"* Gross Price Movement: {gross_pnl:+.2f} Pts\n"
+        f"* Gross Price Movement: {gross_pnl:+.2f} Pts (Raw Market Gain/Loss)\n"
+        f"* Brokerage / Taker Fee: -{fee_pnl:.2f} Pts (0.04% round-trip)\n"
         f"* Net Realized Output: {net_pnl:+.2f} Pts\n\n"
         f"📊 *Running Scorecard Today:*\n"
         f"🏆 Wins: {wins} | ❌ Losses: {losses}\n"
+        f"💸 Total Brokerage Fees: -{total_brokerage:.2f} points\n"
         f"💰 Net Performance: {total_net:+.2f} points"
     )
     return send_whatsapp_message(msg)
@@ -104,7 +106,7 @@ def send_exit_breakdown_alert(asset_name, result_tag, gross_pnl, fee_pnl, net_pn
 def send_hard_exit_alert(exit_msg_text: str):
     return send_whatsapp_message(exit_msg_text)
 
-def send_eod_report(asset_name: str, date_str: str, wins: int, losses: int, net_points: float):
+def send_eod_report(asset_name: str, date_str: str, wins: int, losses: int, brokerage: float, net_points: float):
     total_trades = wins + losses
     win_rate = (wins / total_trades * 100.0) if total_trades > 0 else 0.0
     
@@ -116,7 +118,8 @@ def send_eod_report(asset_name: str, date_str: str, wins: int, losses: int, net_
         f"* Total Trades Executed: {total_trades}\n"
         f"* Successful Trades (Wins): {wins} 🟢\n"
         f"* Stopped Trades (Losses): {losses} 🔴\n"
-        f"🎯 *Win Rate:* {win_rate:.1f}%\n\n"
+        f"🎯 *Strategy Win Rate:* {win_rate:.1f}%\n"
+        f"💸 *Total Brokerage Fees:* -{brokerage:.2f} points\n\n"
         f"💰 *NET PERFORMANCE*\n"
         f"🚀 *Total Net Points:* {net_points:+.2f} Points\n\n"
         f"🛡️ Day {date_str} concluded. All positions settled."

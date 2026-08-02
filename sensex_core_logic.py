@@ -1,8 +1,10 @@
 # sensex_core_logic.py
 """
-Phase 3.0 (Sensex) Execution Engine.
+Phase 3.1 (Sensex) High-Frequency Execution Engine.
 Features:
-- Micro-Trailing Engine (Level 1 Breakeven Lock at +15-20 pts, Level 2 Dynamic 20-pt Trail at +40 pts).
+- Decoupled 8-10 Second Micro-Trailing Engine (Level 1 Breakeven Lock at +15-20 pts, Level 2 Dynamic 20-pt Trail at +40 pts).
+- Pure Gross Market Movement Win/Loss Classification (Wins & Losses evaluated on raw price move).
+- Separate Brokerage / Exchange Fee Accounting.
 - Mandatory 3-Minute Post-Exit Cooldown (180s).
 - Opposing Wick Rejection Filter (>40% Wick Height).
 - 3 Consecutive Loss Circuit Breaker (30-min pause).
@@ -59,6 +61,15 @@ def calculate_adx_wilder(highs, lows, closes, period=14):
     adx = sum(dx_list[-period:]) / min(len(dx_list), period)
     return round(adx, 1)
 
+def calculate_atr(highs, lows, closes, period=14):
+    if len(closes) < period + 1:
+        return 10.0
+    tr_list = []
+    for i in range(1, len(closes)):
+        tr = max(highs[i] - lows[i], abs(highs[i] - closes[i-1]), abs(lows[i] - closes[i-1]))
+        tr_list.append(tr)
+    return round(sum(tr_list[-period:]) / period, 2)
+
 def is_wick_rejection(c_open, c_high, c_low, c_close, trend):
     c_range = c_high - c_low
     if c_range <= 0:
@@ -79,6 +90,7 @@ def evaluate_micro_trailing(state, current_price, curr_15):
         return None, state
 
     entry_price = trade.get("entry_price", 0.0)
+    fee_points = round(current_price * 0.0004, 2)
     now_ts = time.time()
     signal = None
 
@@ -89,20 +101,24 @@ def evaluate_micro_trailing(state, current_price, curr_15):
         peak_gain = trade["max_expansion"] - entry_price
         current_gain = current_price - entry_price
 
+        # Level 1 Breakeven Lock (+15 to +20 pts)
         if peak_gain >= 15.0 and trade.get("sl_price", 0.0) < (entry_price + 2.0):
             trade["sl_price"] = entry_price + 2.0
             trade["trail_level"] = 1
 
+        # Level 2 Dynamic Trail (+40 pts) -> SL 20 pts behind peak
         if peak_gain >= 40.0:
             new_sl = trade["max_expansion"] - 20.0
             if new_sl > trade.get("sl_price", 0.0):
                 trade["sl_price"] = new_sl
                 trade["trail_level"] = 2
 
+        # Exit Check 1: Trailing SL or Breakeven SL Hit
         effective_sl = max(trade.get("sl_price", 0.0), curr_15)
         if current_price <= effective_sl:
-            retained_points = round(current_gain, 2)
-            is_win = (retained_points > 0)
+            gross_points = round(current_gain, 2)
+            retained_points = round(gross_points - fee_points, 2)
+            is_win = (gross_points > 0)
             result_tag = "WIN" if is_win else "LOSS"
 
             if is_win:
@@ -112,15 +128,18 @@ def evaluate_micro_trailing(state, current_price, curr_15):
                 state["metrics"]["losses"] += 1
                 state["consecutive_losses"] = state.get("consecutive_losses", 0) + 1
 
-            state["metrics"]["net_points"] += retained_points
+            state["metrics"]["brokerage"] = round(state["metrics"].get("brokerage", 0.0) + fee_points, 2)
+            state["metrics"]["net_points"] = round(state["metrics"].get("net_points", 0.0) + retained_points, 2)
             state["last_exit_timestamp"] = now_ts
             
+            # Circuit Breaker: 3 consecutive losses -> 30-min pause (1800s)
             if state.get("consecutive_losses", 0) >= 3:
                 state["circuit_breaker_until"] = now_ts + 1800
 
             signal = {
                 "type": "HARD_EXIT", "price": current_price, "direction": "BULLISH",
-                "result": result_tag, "points": retained_points, "trail_level": trade.get("trail_level", 0)
+                "result": result_tag, "gross_points": gross_points, "fee_points": fee_points,
+                "points": retained_points, "trail_level": trade.get("trail_level", 0)
             }
             state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
             state["current_trend"] = "NEUTRAL"
@@ -132,20 +151,24 @@ def evaluate_micro_trailing(state, current_price, curr_15):
         peak_gain = entry_price - trade["max_expansion"]
         current_gain = entry_price - current_price
 
+        # Level 1 Breakeven Lock (+15 to +20 pts)
         if peak_gain >= 15.0 and (trade.get("sl_price", 99999999.0) > (entry_price - 2.0)):
             trade["sl_price"] = entry_price - 2.0
             trade["trail_level"] = 1
 
+        # Level 2 Dynamic Trail (+40 pts) -> SL 20 pts behind peak
         if peak_gain >= 40.0:
             new_sl = trade["max_expansion"] + 20.0
             if trade.get("sl_price", 99999999.0) == 0.0 or new_sl < trade["sl_price"]:
                 trade["sl_price"] = new_sl
                 trade["trail_level"] = 2
 
+        # Exit Check 1: Trailing SL or Breakeven SL Hit
         effective_sl = min(trade["sl_price"], curr_15) if trade.get("sl_price", 0.0) > 0 else curr_15
         if current_price >= effective_sl:
-            retained_points = round(current_gain, 2)
-            is_win = (retained_points > 0)
+            gross_points = round(current_gain, 2)
+            retained_points = round(gross_points - fee_points, 2)
+            is_win = (gross_points > 0)
             result_tag = "WIN" if is_win else "LOSS"
 
             if is_win:
@@ -155,15 +178,18 @@ def evaluate_micro_trailing(state, current_price, curr_15):
                 state["metrics"]["losses"] += 1
                 state["consecutive_losses"] = state.get("consecutive_losses", 0) + 1
 
-            state["metrics"]["net_points"] += retained_points
+            state["metrics"]["brokerage"] = round(state["metrics"].get("brokerage", 0.0) + fee_points, 2)
+            state["metrics"]["net_points"] = round(state["metrics"].get("net_points", 0.0) + retained_points, 2)
             state["last_exit_timestamp"] = now_ts
             
+            # Circuit Breaker: 3 consecutive losses -> 30-min pause (1800s)
             if state.get("consecutive_losses", 0) >= 3:
                 state["circuit_breaker_until"] = now_ts + 1800
 
             signal = {
                 "type": "HARD_EXIT", "price": current_price, "direction": "BEARISH",
-                "result": result_tag, "points": retained_points, "trail_level": trade.get("trail_level", 0)
+                "result": result_tag, "gross_points": gross_points, "fee_points": fee_points,
+                "points": retained_points, "trail_level": trade.get("trail_level", 0)
             }
             state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
             state["current_trend"] = "NEUTRAL"
@@ -174,33 +200,33 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
     now_ts = time.time()
 
     if len(closes) < 201:
-        last_price = closes[-1] if len(closes) > 0 else 80000.0
-        fallback_telemetry = {
-            "last_price": last_price,
-            "curr_9": last_price, "curr_15": last_price, "curr_200": last_price,
-            "spread": 0.0, "spread_pct": 0.0, "pattern": "Good Candle",
-            "vol_ratio": 1.0, "breakout": "Inside Bar Consolidation", "body_ratio": 0.50,
-            "checklist_file_str": "Cross: ❌ | 200EMA: ❌ | Candle: ❌ | Volume Fuel: ❌",
-            "sys_action": "Gathering initial SENSEX market ticks..."
+        default_telemetry = {
+            "last_price": closes[-1] if closes else 0.0,
+            "curr_9": 0.0, "curr_15": 0.0, "curr_200": 0.0,
+            "spread": 0.0, "spread_pct": 0.0, "pattern": "Syncing Data",
+            "vol_ratio": 1.0, "breakout": "N/A", "adx": 25.0, "atr": 10.0, "body_ratio": 0.50,
+            "checklist_file_str": "Cross: ❌ | 200EMA: ❌ | ADX Trend: ❌ | Body Ratio: ❌",
+            "sys_action": "Syncing historical candle vector..."
         }
-        return state, None, fallback_telemetry
+        return state, None, default_telemetry
 
     today_str = datetime.now(IST).strftime("%Y-%m-%d")
     eod_signal = None
 
     if "metrics" in state and state["metrics"].get("date") and state["metrics"].get("date") != today_str:
-        prev_date = state["metrics"].get("date")
+        old_date = state["metrics"].get("date")
         eod_signal = {
             "type": "EOD_REPORT",
-            "date": prev_date,
+            "date": old_date,
             "wins": state["metrics"].get("wins", 0),
             "losses": state["metrics"].get("losses", 0),
+            "brokerage": state["metrics"].get("brokerage", 0.0),
             "net_points": state["metrics"].get("net_points", 0.0)
         }
-        state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "net_points": 0.0}
+        state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "brokerage": 0.0, "net_points": 0.0}
         state["consecutive_losses"] = 0
     elif "metrics" not in state:
-        state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "net_points": 0.0}
+        state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "brokerage": 0.0, "net_points": 0.0}
 
     if "active_trade" not in state or not isinstance(state["active_trade"], dict):
         state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
@@ -215,6 +241,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
     curr_200 = ema200_vector[-2]
 
     adx_val = calculate_adx_wilder(highs, lows, closes, 14)
+    atr_val = calculate_atr(highs, lows, closes, 14)
 
     spread = abs(curr_9 - curr_15)
     spread_pct = (spread / curr_15) * 100 if curr_15 > 0 else 0.0
@@ -248,6 +275,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
 
     breakout = "Prev High Smashed" if last_price > highs[-3] else ("Prev Low Smashed" if last_price < lows[-3] else "Inside Bar Consolidation")
 
+    # State Trend Age & Direction
     if is_bullish_cross:
         state["current_trend"] = "BULLISH"
         state["trend_age"] = 0
@@ -293,7 +321,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
     tick_body = "✅" if is_solid_candle else "❌"
 
     checklist_file_str = f"Cross: {tick_cross} | 200EMA: {tick_macro} | ADX({adx_val}): {tick_adx} | Body({body_ratio_rounded}): {tick_body}"
-    sys_action = f"Monitoring {state['current_trend']} SENSEX trend... Holding state (Age {state['trend_age']}m)"
+    sys_action = f"Monitoring {state['current_trend']} trend matrix... Holding structural state (Age {state['trend_age']}m)"
     signal = None
 
     if state["active_trade"]["direction"] is None and state["current_trend"] in ("BULLISH", "BEARISH") and state["trend_age"] <= 5:
@@ -309,7 +337,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
                     sys_action = f"Bullish breakout verified (Age {state['trend_age']}m)! Transmitting entry..."
                     state["active_trade"] = {"direction": "BULLISH", "entry_price": last_price, "max_expansion": last_price, "sl_price": 0.0, "trail_level": 0}
                     signal = {
-                        "type": "ENTRY_BULLISH", "price": last_price, "pattern": pattern,
+                        "type": "ENTRY_BULLISH", "price": last_price, "pattern": pattern, 
                         "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
                     }
                 else:
@@ -321,7 +349,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
                     sys_action = f"Bearish breakdown verified (Age {state['trend_age']}m)! Transmitting entry..."
                     state["active_trade"] = {"direction": "BEARISH", "entry_price": last_price, "max_expansion": last_price, "sl_price": 0.0, "trail_level": 0}
                     signal = {
-                        "type": "ENTRY_BEARISH", "price": last_price, "pattern": pattern,
+                        "type": "ENTRY_BEARISH", "price": last_price, "pattern": pattern, 
                         "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
                     }
                 else:
@@ -336,17 +364,24 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
         if micro_sig:
             signal = micro_sig
 
-    if signal is None and eod_signal is not None:
-        signal = eod_signal
-
     telemetry = {
         "last_price": last_price,
-        "curr_9": curr_9, "curr_15": curr_15, "curr_200": curr_200,
-        "spread": spread, "spread_pct": spread_pct,
-        "pattern": pattern, "vol_ratio": vol_ratio, "breakout": breakout,
-        "adx": adx_val, "body_ratio": body_ratio_rounded,
+        "curr_9": curr_9,
+        "curr_15": curr_15,
+        "curr_200": curr_200,
+        "spread": spread,
+        "spread_pct": spread_pct,
+        "pattern": pattern,
+        "vol_ratio": vol_ratio,
+        "breakout": breakout,
+        "adx": adx_val,
+        "atr": atr_val,
+        "body_ratio": body_ratio_rounded,
         "checklist_file_str": checklist_file_str,
         "sys_action": sys_action
     }
+
+    if signal is None and eod_signal is not None:
+        signal = eod_signal
 
     return state, signal, telemetry
