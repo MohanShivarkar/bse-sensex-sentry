@@ -255,14 +255,16 @@ def run_asset_production_loop(name, details):
                 time.sleep(5)
                 continue
 
+            opens = [candle[1] for candle in ohlcv]
+            highs = [candle[2] for candle in ohlcv]
+            lows = [candle[3] for candle in ohlcv]
             closes = [candle[4] for candle in ohlcv]
             volumes = [candle[5] for candle in ohlcv]
-            highs = [candle[1] for candle in ohlcv]
-            lows = [candle[2] for candle in ohlcv]
 
             state, signal, telemetry = sensex_core_logic.analyze_market(
-                closes, highs, lows, volumes, asset_states[name]
+                closes, highs, lows, volumes, asset_states[name], opens=opens
             )
+
             asset_states[name] = state
             save_todays_metrics(name, state["metrics"])
 

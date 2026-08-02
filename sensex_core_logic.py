@@ -1,6 +1,6 @@
 # sensex_core_logic.py
 """
-Phase 2.1 BSE Sensex Core Engine with Trend Entry Window & Wilder ADX Smoothing.
+Phase 2.2 BSE Sensex Core Engine with True OHLCV Candle Body Delta & Trend Entry Window (Age 0m - 5m).
 """
 from datetime import datetime, timezone, timedelta
 
@@ -52,14 +52,14 @@ def calculate_adx_wilder(highs, lows, closes, period=14):
     adx = sum(dx_list[-period:]) / min(len(dx_list), period)
     return round(adx, 1)
 
-def analyze_market(closes, highs, lows, volumes, state):
+def analyze_market(closes, highs, lows, volumes, state, opens=None):
     if len(closes) < 201:
         last_price = closes[-1] if len(closes) > 0 else 80000.0
         fallback_telemetry = {
             "last_price": last_price,
             "curr_9": last_price, "curr_15": last_price, "curr_200": last_price,
             "spread": 0.0, "spread_pct": 0.0, "pattern": "Good Candle",
-            "vol_ratio": 1.0, "breakout": "Inside Bar Consolidation",
+            "vol_ratio": 1.0, "breakout": "Inside Bar Consolidation", "body_ratio": 0.50,
             "checklist_file_str": "Cross: ❌ | 200EMA: ❌ | Candle: ❌ | Volume Fuel: ❌",
             "sys_action": "Gathering initial SENSEX market ticks..."
         }
@@ -102,16 +102,18 @@ def analyze_market(closes, highs, lows, volumes, state):
     is_bullish_cross = (prev_9 <= prev_15) and (curr_9 > curr_15)
     is_bearish_cross = (prev_9 >= prev_15) and (curr_9 < curr_15)
 
-    is_green_candle = closes[-2] > closes[-3]
-    candle_body = abs(closes[-2] - closes[-3])
-    candle_range = highs[-2] - lows[-2]
-    body_ratio = (candle_body / candle_range) if candle_range > 0 else 0.0
+    # TRUE CANDLE BODY DELTA (|Close - Open| / |High - Low|)
+    candle_open = opens[-2] if (opens and len(opens) >= 2) else closes[-3]
+    is_green_candle = closes[-2] >= candle_open
+    candle_body = abs(closes[-2] - candle_open)
+    candle_range = max(highs[-2] - lows[-2], 0.00001)
+    body_ratio = candle_body / candle_range
     body_ratio_rounded = round(body_ratio, 2)
     color_label = "Green" if is_green_candle else "Red"
 
-    if body_ratio >= 0.75:
+    if body_ratio >= 0.70:
         pattern = f"Strong {color_label} Candle"
-    elif 0.40 <= body_ratio < 0.75:
+    elif 0.35 <= body_ratio < 0.70:
         pattern = f"Good {color_label} Candle"
     else:
         pattern = f"Weak {color_label} Candle"
@@ -148,7 +150,7 @@ def analyze_market(closes, highs, lows, volumes, state):
         has_macro_clearance = True
     tick_macro = "✅" if has_macro_clearance else "❌"
     
-    is_solid_candle = (body_ratio >= 0.40)
+    is_solid_candle = (body_ratio >= 0.35)
     tick_adx = "✅" if adx_val >= 15.0 else "❌"
     tick_body = "✅" if is_solid_candle else "❌"
 
