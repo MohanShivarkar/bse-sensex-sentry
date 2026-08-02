@@ -1,7 +1,14 @@
 # sensex_core_logic.py
 """
-Phase 2.2 BSE Sensex Core Engine with True OHLCV Candle Body Delta & Trend Entry Window (Age 0m - 5m).
+Phase 3.0 (Sensex) Execution Engine.
+Features:
+- Micro-Trailing Engine (Level 1 Breakeven Lock at +15-20 pts, Level 2 Dynamic 20-pt Trail at +40 pts).
+- Mandatory 3-Minute Post-Exit Cooldown (180s).
+- Opposing Wick Rejection Filter (>40% Wick Height).
+- 3 Consecutive Loss Circuit Breaker (30-min pause).
+- Ghost SL Purge & Complete State Hygiene.
 """
+import time
 from datetime import datetime, timezone, timedelta
 
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -52,7 +59,120 @@ def calculate_adx_wilder(highs, lows, closes, period=14):
     adx = sum(dx_list[-period:]) / min(len(dx_list), period)
     return round(adx, 1)
 
+def is_wick_rejection(c_open, c_high, c_low, c_close, trend):
+    c_range = c_high - c_low
+    if c_range <= 0:
+        return False
+        
+    if trend == "BULLISH":
+        upper_wick = c_high - max(c_open, c_close)
+        return (upper_wick / c_range) > 0.40
+    elif trend == "BEARISH":
+        lower_wick = min(c_open, c_close) - c_low
+        return (lower_wick / c_range) > 0.40
+    return False
+
+def evaluate_micro_trailing(state, current_price, curr_15):
+    trade = state.get("active_trade", {})
+    direction = trade.get("direction")
+    if not direction:
+        return None, state
+
+    entry_price = trade.get("entry_price", 0.0)
+    now_ts = time.time()
+    signal = None
+
+    if direction == "BULLISH":
+        if current_price > trade.get("max_expansion", 0.0):
+            trade["max_expansion"] = current_price
+        
+        peak_gain = trade["max_expansion"] - entry_price
+        current_gain = current_price - entry_price
+
+        if peak_gain >= 15.0 and trade.get("sl_price", 0.0) < (entry_price + 2.0):
+            trade["sl_price"] = entry_price + 2.0
+            trade["trail_level"] = 1
+
+        if peak_gain >= 40.0:
+            new_sl = trade["max_expansion"] - 20.0
+            if new_sl > trade.get("sl_price", 0.0):
+                trade["sl_price"] = new_sl
+                trade["trail_level"] = 2
+
+        effective_sl = max(trade.get("sl_price", 0.0), curr_15)
+        if current_price <= effective_sl:
+            retained_points = round(current_gain, 2)
+            is_win = (retained_points > 0)
+            result_tag = "WIN" if is_win else "LOSS"
+
+            if is_win:
+                state["metrics"]["wins"] += 1
+                state["consecutive_losses"] = 0
+            else:
+                state["metrics"]["losses"] += 1
+                state["consecutive_losses"] = state.get("consecutive_losses", 0) + 1
+
+            state["metrics"]["net_points"] += retained_points
+            state["last_exit_timestamp"] = now_ts
+            
+            if state.get("consecutive_losses", 0) >= 3:
+                state["circuit_breaker_until"] = now_ts + 1800
+
+            signal = {
+                "type": "HARD_EXIT", "price": current_price, "direction": "BULLISH",
+                "result": result_tag, "points": retained_points, "trail_level": trade.get("trail_level", 0)
+            }
+            state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
+            state["current_trend"] = "NEUTRAL"
+
+    elif direction == "BEARISH":
+        if current_price < trade.get("max_expansion", 99999999.0) or trade.get("max_expansion") == 0.0:
+            trade["max_expansion"] = current_price
+        
+        peak_gain = entry_price - trade["max_expansion"]
+        current_gain = entry_price - current_price
+
+        if peak_gain >= 15.0 and (trade.get("sl_price", 99999999.0) > (entry_price - 2.0)):
+            trade["sl_price"] = entry_price - 2.0
+            trade["trail_level"] = 1
+
+        if peak_gain >= 40.0:
+            new_sl = trade["max_expansion"] + 20.0
+            if trade.get("sl_price", 99999999.0) == 0.0 or new_sl < trade["sl_price"]:
+                trade["sl_price"] = new_sl
+                trade["trail_level"] = 2
+
+        effective_sl = min(trade["sl_price"], curr_15) if trade.get("sl_price", 0.0) > 0 else curr_15
+        if current_price >= effective_sl:
+            retained_points = round(current_gain, 2)
+            is_win = (retained_points > 0)
+            result_tag = "WIN" if is_win else "LOSS"
+
+            if is_win:
+                state["metrics"]["wins"] += 1
+                state["consecutive_losses"] = 0
+            else:
+                state["metrics"]["losses"] += 1
+                state["consecutive_losses"] = state.get("consecutive_losses", 0) + 1
+
+            state["metrics"]["net_points"] += retained_points
+            state["last_exit_timestamp"] = now_ts
+            
+            if state.get("consecutive_losses", 0) >= 3:
+                state["circuit_breaker_until"] = now_ts + 1800
+
+            signal = {
+                "type": "HARD_EXIT", "price": current_price, "direction": "BEARISH",
+                "result": result_tag, "points": retained_points, "trail_level": trade.get("trail_level", 0)
+            }
+            state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
+            state["current_trend"] = "NEUTRAL"
+
+    return signal, state
+
 def analyze_market(closes, highs, lows, volumes, state, opens=None):
+    now_ts = time.time()
+
     if len(closes) < 201:
         last_price = closes[-1] if len(closes) > 0 else 80000.0
         fallback_telemetry = {
@@ -78,6 +198,12 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
             "net_points": state["metrics"].get("net_points", 0.0)
         }
         state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "net_points": 0.0}
+        state["consecutive_losses"] = 0
+    elif "metrics" not in state:
+        state["metrics"] = {"date": today_str, "wins": 0, "losses": 0, "net_points": 0.0}
+
+    if "active_trade" not in state or not isinstance(state["active_trade"], dict):
+        state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
 
     ema9_vector = calculate_ema(closes, 9)
     ema15_vector = calculate_ema(closes, 15)
@@ -102,11 +228,13 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
     is_bullish_cross = (prev_9 <= prev_15) and (curr_9 > curr_15)
     is_bearish_cross = (prev_9 >= prev_15) and (curr_9 < curr_15)
 
-    # TRUE CANDLE BODY DELTA (|Close - Open| / |High - Low|)
+    # TRUE CANDLE BODY DELTA
     candle_open = opens[-2] if (opens and len(opens) >= 2) else closes[-3]
+    candle_high = highs[-2]
+    candle_low = lows[-2]
     is_green_candle = closes[-2] >= candle_open
     candle_body = abs(closes[-2] - candle_open)
-    candle_range = max(highs[-2] - lows[-2], 0.00001)
+    candle_range = max(candle_high - candle_low, 0.00001)
     body_ratio = candle_body / candle_range
     body_ratio_rounded = round(body_ratio, 2)
     color_label = "Green" if is_green_candle else "Red"
@@ -142,6 +270,16 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
         state["current_trend"] = "NEUTRAL"
         state["trend_age"] = 0
 
+    last_exit_ts = state.get("last_exit_timestamp", 0)
+    cooldown_remaining = max(0, int(180 - (now_ts - last_exit_ts)))
+    is_cooldown_active = (cooldown_remaining > 0)
+
+    cb_until = state.get("circuit_breaker_until", 0)
+    cb_remaining = max(0, int(cb_until - now_ts))
+    is_cb_active = (cb_remaining > 0)
+
+    is_wick_rejected = is_wick_rejection(candle_open, candle_high, candle_low, closes[-2], state["current_trend"])
+
     tick_cross = "✅" if (is_bullish_cross or is_bearish_cross or state["trend_age"] <= 5) else "❌"
     has_macro_clearance = False
     if state["current_trend"] == "BULLISH" and last_price > curr_200: 
@@ -150,7 +288,7 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
         has_macro_clearance = True
     tick_macro = "✅" if has_macro_clearance else "❌"
     
-    is_solid_candle = (body_ratio >= 0.35)
+    is_solid_candle = (body_ratio >= 0.35) and (not is_wick_rejected)
     tick_adx = "✅" if adx_val >= 15.0 else "❌"
     tick_body = "✅" if is_solid_candle else "❌"
 
@@ -158,74 +296,45 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
     sys_action = f"Monitoring {state['current_trend']} SENSEX trend... Holding state (Age {state['trend_age']}m)"
     signal = None
 
-    # Early Trend Entry Window (Age 0m - 5m)
     if state["active_trade"]["direction"] is None and state["current_trend"] in ("BULLISH", "BEARISH") and state["trend_age"] <= 5:
-        if state["current_trend"] == "BULLISH":
-            if last_price > curr_200 and is_solid_candle:
-                sys_action = f"Bullish breakout verified (Age {state['trend_age']}m)! Transmitting entry..."
-                state["active_trade"] = {"direction": "BULLISH", "entry_price": last_price, "max_expansion": last_price, "targets_achieved": []}
-                signal = {
-                    "type": "ENTRY_BULLISH", "price": last_price, "pattern": pattern,
-                    "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
-                }
-            else:
-                reason = "under 200 EMA" if last_price <= curr_200 else "weak candle body"
-                sys_action = f"Entry window open (Age {state['trend_age']}m) | Pending: {reason}"
-                
-        elif state["current_trend"] == "BEARISH":
-            if last_price < curr_200 and is_solid_candle:
-                sys_action = f"Bearish breakdown verified (Age {state['trend_age']}m)! Transmitting entry..."
-                state["active_trade"] = {"direction": "BEARISH", "entry_price": last_price, "max_expansion": last_price, "targets_achieved": []}
-                signal = {
-                    "type": "ENTRY_BEARISH", "price": last_price, "pattern": pattern,
-                    "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
-                }
-            else:
-                reason = "over 200 EMA" if last_price >= curr_200 else "weak candle body"
-                sys_action = f"Entry window open (Age {state['trend_age']}m) | Pending: {reason}"
-
-    elif state["current_trend"] == "NEUTRAL":
-        state["active_trade"] = {"direction": None, "entry_price": 0.0, "targets_achieved": []}
-
-    if state["active_trade"]["direction"] == "BULLISH":
-        if last_price > state["active_trade"].get("max_expansion", 0.0):
-            state["active_trade"]["max_expansion"] = last_price
-    elif state["active_trade"]["direction"] == "BEARISH":
-        if last_price < state["active_trade"].get("max_expansion", 99999999.0) or state["active_trade"].get("max_expansion") == 0.0:
-            state["active_trade"]["max_expansion"] = last_price
-
-    if state["active_trade"]["direction"] == "BULLISH" and last_price < curr_15:
-        retained_points = round(last_price - state["active_trade"]["entry_price"], 2)
-
-        if retained_points > 0:
-            state["metrics"]["wins"] += 1
-            result_tag = "WIN"
+        if is_cb_active:
+            sys_action = f"CIRCUIT BREAKER ACTIVE (3 consecutive losses). Trading paused for {cb_remaining}s."
+        elif is_cooldown_active:
+            sys_action = f"POST-EXIT COOLDOWN ACTIVE. Re-entry locked for {cooldown_remaining}s."
+        elif is_wick_rejected:
+            sys_action = f"ENTRY REJECTED: Preceding candle opposing wick >40% of range."
         else:
-            state["metrics"]["losses"] += 1
-            result_tag = "LOSS"
+            if state["current_trend"] == "BULLISH":
+                if last_price > curr_200 and is_solid_candle:
+                    sys_action = f"Bullish breakout verified (Age {state['trend_age']}m)! Transmitting entry..."
+                    state["active_trade"] = {"direction": "BULLISH", "entry_price": last_price, "max_expansion": last_price, "sl_price": 0.0, "trail_level": 0}
+                    signal = {
+                        "type": "ENTRY_BULLISH", "price": last_price, "pattern": pattern,
+                        "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
+                    }
+                else:
+                    reason = "under 200 EMA" if last_price <= curr_200 else "weak candle / wick rejection"
+                    sys_action = f"Entry window open (Age {state['trend_age']}m) | Pending: {reason}"
+                    
+            elif state["current_trend"] == "BEARISH":
+                if last_price < curr_200 and is_solid_candle:
+                    sys_action = f"Bearish breakdown verified (Age {state['trend_age']}m)! Transmitting entry..."
+                    state["active_trade"] = {"direction": "BEARISH", "entry_price": last_price, "max_expansion": last_price, "sl_price": 0.0, "trail_level": 0}
+                    signal = {
+                        "type": "ENTRY_BEARISH", "price": last_price, "pattern": pattern,
+                        "breakout": breakout, "vol_ratio": vol_ratio, "dist_sign": dist_sign, "distance_200": abs(distance_200)
+                    }
+                else:
+                    reason = "over 200 EMA" if last_price >= curr_200 else "weak candle / wick rejection"
+                    sys_action = f"Entry window open (Age {state['trend_age']}m) | Pending: {reason}"
 
-        state["metrics"]["net_points"] += retained_points
-        sys_action = f"STRUCTURE BREACHED. Hard Exit. Result: {result_tag} ({retained_points:+.2f} pts)"
-        signal = {"type": "HARD_EXIT", "price": last_price, "direction": "BULLISH", "result": result_tag, "points": retained_points}
-        state["active_trade"] = {"direction": None, "entry_price": 0.0, "targets_achieved": []}
-        state["current_trend"] = "NEUTRAL"
+    elif state["current_trend"] == "NEUTRAL" and state["active_trade"]["direction"] is None:
+        state["active_trade"] = {"direction": None, "entry_price": 0.0, "max_expansion": 0.0, "sl_price": 0.0, "trail_level": 0}
 
-    elif state["active_trade"]["direction"] == "BEARISH" and last_price > curr_15:
-        retained_points = round(state["active_trade"]["entry_price"] - last_price, 2)
-
-        if retained_points > 0:
-            state["metrics"]["wins"] += 1
-            result_tag = "WIN"
-        else:
-            state["metrics"]["losses"] += 1
-            result_tag = "LOSS"
-
-        state["metrics"]["net_points"] += retained_points
-        sys_action = f"STRUCTURE BREACHED. Hard Exit. Result: {result_tag} ({retained_points:+.2f} pts)"
-        signal = {"type": "HARD_EXIT", "price": last_price, "direction": "BEARISH", "result": result_tag, "points": retained_points}
-        state["active_trade"] = {"direction": None, "entry_price": 0.0, "targets_achieved": []}
-        state["current_trend"] = "NEUTRAL"
-
+    if state["active_trade"]["direction"] is not None:
+        micro_sig, state = evaluate_micro_trailing(state, last_price, curr_15)
+        if micro_sig:
+            signal = micro_sig
 
     if signal is None and eod_signal is not None:
         signal = eod_signal
