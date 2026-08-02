@@ -1,12 +1,32 @@
 # app.py
 from flask import Flask, render_template, jsonify, abort, request
 import os
+import threading
+import time
+import requests
 import sensex_manager
 
 app = Flask(__name__)
 
 # Start the background BSE Sensex tracking daemon automatically on server boot
 sensex_manager.start_manager_nodes()
+
+def keep_alive_daemon():
+    """
+    Self-pinging background thread to prevent Render Free Tier from going to sleep.
+    Pings local /status endpoint every 4 minutes to guarantee continuous Indian Market scanning.
+    """
+    time.sleep(15)
+    port = int(os.environ.get("PORT", 5001))
+    url = f"http://127.0.0.1:{port}/status"
+    while True:
+        try:
+            requests.get(url, timeout=5)
+        except Exception:
+            pass
+        time.sleep(240)
+
+threading.Thread(target=keep_alive_daemon, daemon=True).start()
 
 @app.before_request
 def ensure_manager_nodes():

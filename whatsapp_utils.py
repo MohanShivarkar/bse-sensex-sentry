@@ -25,7 +25,8 @@ def send_initialization_alert(asset_name: str = "SENSEX", timeframe: str = "1m")
         f"⚡ *MOHAN'S RESEARCH: BSE SENSEX SENTRY ONLINE*\n\n"
         f"🚀 *Asset:* {asset_name} ({timeframe} Scalp)\n"
         f"📈 *Live Chart:* {chart_url}\n"
-        f"📌 *Engine Status:* Active & Armed (Indian Market Hours)\n\n"
+        f"📌 *Engine Status:* Active & Armed ({config.SYSTEM_VERSION})\n\n"
+
         f"🎯 *SETUP CONFINES*\n"
         f"* Trend Filter: High-Velocity Momentum Edge\n"
         f"* Volume Fuel: Institutional Volume Confirmed\n"

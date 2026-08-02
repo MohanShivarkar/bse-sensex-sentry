@@ -3,17 +3,20 @@
 # =======================================================================================
 import os
 
-# Dhan API Credentials (Get access token from https://dhanhq.co)
+# Dhan API Credentials (Get access token / API key from https://dhanhq.co)
 DHAN_CLIENT_ID = os.environ.get("DHAN_CLIENT_ID", "YOUR_DHAN_CLIENT_ID")
 DHAN_ACCESS_TOKEN = os.environ.get("DHAN_ACCESS_TOKEN", "YOUR_DHAN_ACCESS_TOKEN")
+DHAN_API_KEY = os.environ.get("DHAN_API_KEY", "072d3f26")
+DHAN_API_SECRET = os.environ.get("DHAN_API_SECRET", "752172ed-2ab7-4ad2-9fef-b1c8296867c3")
 
 # Execution Mode Toggles
 # Phase 1: Signal Monitoring & Multi-Channel Alerts (ACTIVE)
 # Phase 2: Automated Dhan Options Trading (Set AUTO_TRADE_ENABLED = True when ready)
 AUTO_TRADE_ENABLED = False 
+SYSTEM_VERSION = "Phase 1.0 (Sensex)"
 
-# If Dhan Access Token is not provided, enable Fallback Feed Mode automatically
-MOCK_FEED_ENABLED = (DHAN_ACCESS_TOKEN == "YOUR_DHAN_ACCESS_TOKEN" or not DHAN_ACCESS_TOKEN)
+# If Dhan Access Token/API Key is not provided, enable Fallback Feed Mode automatically
+MOCK_FEED_ENABLED = (DHAN_ACCESS_TOKEN == "YOUR_DHAN_ACCESS_TOKEN" and DHAN_API_KEY == "YOUR_DHAN_API_KEY")
 
 # Telegram Gateway Configuration
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8829418844:AAGU1BD2ASTdw4KTdYhbeyi94JJX5ImxjxE")
