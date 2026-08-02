@@ -13,7 +13,8 @@ DHAN_API_SECRET = os.environ.get("DHAN_API_SECRET", "752172ed-2ab7-4ad2-9fef-b1c
 # Phase 1: Signal Monitoring & Multi-Channel Alerts (ACTIVE)
 # Phase 2: Automated Dhan Options Trading (Set AUTO_TRADE_ENABLED = True when ready)
 AUTO_TRADE_ENABLED = False 
-SYSTEM_VERSION = "Phase 1.0 (Sensex)"
+SYSTEM_VERSION = "Phase 1.1 (Sensex)"
+
 
 # If Dhan Access Token/API Key is not provided, enable Fallback Feed Mode automatically
 MOCK_FEED_ENABLED = (DHAN_ACCESS_TOKEN == "YOUR_DHAN_ACCESS_TOKEN" and DHAN_API_KEY == "YOUR_DHAN_API_KEY")

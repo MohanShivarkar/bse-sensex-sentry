@@ -195,17 +195,14 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
             state["active_trade"]["max_expansion"] = last_price
 
     if state["active_trade"]["direction"] == "BULLISH" and last_price < curr_15:
-        peak_points = state["active_trade"]["max_expansion"] - state["active_trade"]["entry_price"]
-        raw_stop_loss_points = last_price - state["active_trade"]["entry_price"]
+        retained_points = round(last_price - state["active_trade"]["entry_price"], 2)
 
-        if peak_points >= 50.0:
+        if retained_points > 0:
             state["metrics"]["wins"] += 1
             result_tag = "WIN"
-            retained_points = max(state["active_trade"]["targets_achieved"]) if state["active_trade"]["targets_achieved"] else 50.0
         else:
             state["metrics"]["losses"] += 1
             result_tag = "LOSS"
-            retained_points = raw_stop_loss_points
 
         state["metrics"]["net_points"] += retained_points
         sys_action = f"STRUCTURE BREACHED. Hard Exit. Result: {result_tag} ({retained_points:+.2f} pts)"
@@ -214,23 +211,21 @@ def analyze_market(closes, highs, lows, volumes, state, opens=None):
         state["current_trend"] = "NEUTRAL"
 
     elif state["active_trade"]["direction"] == "BEARISH" and last_price > curr_15:
-        peak_points = state["active_trade"]["entry_price"] - state["active_trade"]["max_expansion"]
-        raw_stop_loss_points = state["active_trade"]["entry_price"] - last_price
+        retained_points = round(state["active_trade"]["entry_price"] - last_price, 2)
 
-        if peak_points >= 50.0:
+        if retained_points > 0:
             state["metrics"]["wins"] += 1
             result_tag = "WIN"
-            retained_points = max(state["active_trade"]["targets_achieved"]) if state["active_trade"]["targets_achieved"] else 50.0
         else:
             state["metrics"]["losses"] += 1
             result_tag = "LOSS"
-            retained_points = raw_stop_loss_points
 
         state["metrics"]["net_points"] += retained_points
         sys_action = f"STRUCTURE BREACHED. Hard Exit. Result: {result_tag} ({retained_points:+.2f} pts)"
         signal = {"type": "HARD_EXIT", "price": last_price, "direction": "BEARISH", "result": result_tag, "points": retained_points}
         state["active_trade"] = {"direction": None, "entry_price": 0.0, "targets_achieved": []}
         state["current_trend"] = "NEUTRAL"
+
 
     if signal is None and eod_signal is not None:
         signal = eod_signal
