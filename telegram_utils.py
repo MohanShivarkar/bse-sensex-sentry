@@ -29,8 +29,8 @@ def send_initialization_alert(asset_name: str = "SENSEX", timeframe: str = "1m")
         f"🚀 *Market Asset:* {asset_name} ({timeframe} Scalp Node)\n"
         f"📈 *Live Chart:* [BSE:SENSEX Chart]({chart_url})\n"
         f"📌 *Engine Status:* Active & Armed ({config.SYSTEM_VERSION})\n\n"
-
         f"🎯 *SETUP CONFINES*\n"
+        f"• *Build Version:* {config.SYSTEM_VERSION}\n"
         f"• *Trend Filter:* High-Velocity Momentum Edge\n"
         f"• *Volume Fuel:* Institutional Volume Confirmed\n"
         f"• *Macro Guard:* 200 EMA Clearance Active\n\n"
@@ -39,65 +39,80 @@ def send_initialization_alert(asset_name: str = "SENSEX", timeframe: str = "1m")
         f"• Hard Exit. No Hesitation. No Exceptions.\n\n"
         f"🔍 Scanning SENSEX market blocks... Sentry protocols locked."
     )
-    return send_telegram(msg)
+    send_telegram(msg)
 
-def send_signal_alert(asset_name: str, trend: str, price: float, pattern: str, breakout: str, vol_ratio: float, dist_sign: str, dist_val: float):
-    header = "🟢 *MOHAN'S RESEARCH: BREAKOUT ALERT*" if trend == "BULLISH" else "🔴 *MOHAN'S RESEARCH: BREAKDOWN ALERT*"
-    emoji = "📈 *BULLISH RUN*" if trend == "BULLISH" else "📉 *BEARISH RUN*"
+def send_signal_alert(asset_name, trend, price, pattern, breakout, vol_ratio, dist_sign, dist_val):
     chart_url = "https://www.tradingview.com/chart/?symbol=BSE:SENSEX"
+    header = "🟢 *MOHAN'S RESEARCH: BREAKOUT ALERT* 🚀" if trend == "BULLISH" else "🔴 *MOHAN'S RESEARCH: BREAKDOWN ALERT* 📉"
+    side_marker = "📈 *BULLISH RUN*" if trend == "BULLISH" else "📉 *BEARISH RUN*"
     
-    msg = (
-        f"{header}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎯 *SENTRY SIGNAL ACTIVATED*\n"
-        f"• *Market Asset* : `{asset_name}`\n"
-        f"• *Trade Action* : {emoji}\n"
-        f"• *Entry Trigger* : `₹{price:,.2f}`\n"
-        f"• *Live Chart* : [View BSE:SENSEX Chart]({chart_url})\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📋 *STRATEGY CONFINES VERIFICATION*\n"
-        f" ✅ *EMA Cross Engine* : Signal Lock (Age 0)\n"
-        f" ✅ *Macro Guard* : 200 EMA Dist ({dist_sign}₹{dist_val:,.2f})\n"
-        f" ✅ *Candle Profile* : {pattern} ({breakout})\n"
-        f" ✅ *Volume Fuel* : {vol_ratio}x Relative Velocity\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚡ Scalp targets initializing. Tracking SENSEX momentum blocks..."
-    )
+    msg = (f"{header}\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"🎯 *SENTRY SIGNAL ACTIVATED*\n"
+           f"• *Market Asset* : `{asset_name}`\n"
+           f"• *Trade Action* : {side_marker}\n"
+           f"• *Entry Trigger* : `{price:.2f}`\n"
+           f"• *Live Chart* : [View Live Chart]({chart_url})\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📋 *CONFIRMED SETUP MATRICES*\n"
+           f" ✅ *Signal Lock* : Age 0 Confirmation\n"
+           f" ✅ *Macro Guard* : 200 EMA Dist ({dist_sign}{dist_val:.2f})\n"
+           f" ✅ *Candle Profile* : {pattern} ({breakout})\n"
+           f" ✅ *Volume Fuel* : {vol_ratio}x Institutional Volume\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"⚡ *Option strikes active. Fast 8-10s micro-trailing tracking active...*")
     return send_telegram(msg)
 
-def send_milestone_alert(asset_name: str, target: float, entry: float, current: float, trend_age: int, points_moved: float):
-    chart_url = "https://www.tradingview.com/chart/?symbol=BSE:SENSEX"
-    msg = (
-        f"🔥 *MOHAN'S SCALPER: TARGET ACHIEVEMENT*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💰 *SCALP MILESTONE SECURED*\n"
-        f"• *Asset Target* : `{asset_name}`\n"
-        f"• *Initial Entry* : `₹{entry:,.2f}`\n"
-        f"• *Current Price* : `₹{current:,.2f}`\n"
-        f"• *Trend Duration* : {trend_age} minutes\n"
-        f"• *Live Chart* : [View BSE:SENSEX Chart]({chart_url})\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🎉 *PROFIT RUN-UP PROGRESSION*\n"
-        f"✅ *+{target:.0f} Points Target Achieved!*\n"
-        f"🚀 *Total Expansion:* `+{points_moved:,.2f}` Points from Entry.\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 *Tip:* Favorable target window achieved. Lock in partials, trail stops tight to 15 EMA!"
-    )
+def send_trailing_update_alert(asset_name, trail_level, sl_price, current_gain):
+    if trail_level == 1:
+        header = "🛡️ *MOHAN'S SCALPER: BREAKEVEN LOCK SECURED*"
+        desc = f"Gain reached `+{current_gain:.2f} pts`! Stop Loss moved to **Entry + 2 pts** (`{sl_price:.2f}`). Trade is 100% Risk-Free!"
+    else:
+        header = "🚀 *MOHAN'S SCALPER: DYNAMIC PROFIT TRAIL LEVEL 2*"
+        desc = f"Gain reached `+{current_gain:.2f} pts`! Trailing SL adjusted to **`{sl_price:.2f}`** (20 pts behind peak). Profit locked!"
+
+    msg = (f"{header}\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📌 **Asset:** `{asset_name}`\n"
+           f"💡 **Trailing Status:** {desc}\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"⚡ *Riding trend expansion... Micro-trailing active.*")
     return send_telegram(msg)
 
-def send_eod_report(asset_name: str, date_str: str, wins: int, losses: int, net_points: float):
-    total = wins + losses
-    win_rate = (wins / total * 100) if total > 0 else 0.0
-    msg = (
-        f"📊 *MOHAN'S SENSEX DAILY PERFORMANCE REPORT*\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📅 *Trading Date:* `{date_str}`\n"
-        f"📌 *Asset Node:* `{asset_name}`\n"
-        f"🏆 *Scalp Wins:* {wins}\n"
-        f"❌ *Stop-outs:* {losses}\n"
-        f"📈 *Win Rate:* `{win_rate:.1f}%`\n"
-        f"💰 *Net Expansion PnL:* `{net_points:+.2f}` Points\n"
-        f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"🏁 Daily market session closed. Systems resetting for next session."
-    )
+def send_exit_breakdown_alert(asset_name, result_tag, gross_pnl, fee_pnl, net_pnl, exit_price, wins, losses, total_net):
+    outcome_emoji = "🟢 SUCCESS WIN" if result_tag == "WIN" else "🔴 STOP LOSS FAIL"
+    
+    msg = (f"🚨 *MOHAN'S SCALPER: TRADE EXIT SCORECARD* 🚨\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"🚨 **HARD EXIT: {asset_name}** 🚨\n\n"
+           f"• **Trade Result:** {outcome_emoji}\n"
+           f"• **Exit Price:** `{exit_price:.2f}`\n\n"
+           f"📊 **DETAILED PnL BREAKDOWN:**\n"
+           f"• **Gross Price Movement:** `{gross_pnl:+.2f} Pts`\n"
+           f"• **Net Realized Output:** `{net_pnl:+.2f} Pts`\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📊 **Running Scorecard Today:**\n"
+           f"🏆 Wins: `{wins}` | ❌ Losses: `{losses}`\n"
+           f"💰 Net Performance: `{total_net:+.2f} points`")
     return send_telegram(msg)
+
+def send_eod_report(asset_name, date_str, wins, losses, net_points):
+    total_trades = wins + losses
+    win_rate = (wins / total_trades * 100.0) if total_trades > 0 else 0.0
+    
+    msg = (f"📊 *MOHAN'S RESEARCH: EOD PERFORMANCE REPORT* 🏆\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📅 *Date:* `{date_str}`\n"
+           f"📌 *Asset:* `{asset_name}` (1m Scalp Engine)\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📈 *DAILY TRADING SUMMARY*\n"
+           f"• *Total Trades Executed:* `{total_trades}`\n"
+           f"• *Successful Trades (Wins):* `{wins}` 🟢\n"
+           f"• *Stopped Trades (Losses):* `{losses}` 🔴\n"
+           f"🎯 *Win Rate:* `{win_rate:.1f}%`\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"💰 *NET PERFORMANCE*\n"
+           f"🚀 *Total Net Points:* `{net_points:+.2f} Points`\n"
+           f"━━━━━━━━━━━━━━━━━━━━━\n"
+           f"🛡️ *Day {date_str} concluded. All positions settled.*")
+    send_telegram(msg)
